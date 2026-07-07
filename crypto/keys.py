@@ -1,3 +1,4 @@
+from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 
 def generate_rsa_keypair(key_size):
@@ -12,3 +13,13 @@ def calc_key_id(public_key):
     broj = n & 0xFFFFFFFFFFFFFFFF
     key_id = format(broj, "016x")
     return key_id
+
+def public_key_to_pem(public_key):
+    pem_bytes = public_key.public_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PublicFormat.SubjectPublicKeyInfo
+    )
+    return pem_bytes.decode("ascii")
+
+def pem_to_public_key(pem_str):
+    return serialization.load_pem_public_key(pem_str.encode("ascii"))
