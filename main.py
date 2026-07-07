@@ -66,3 +66,19 @@
 #     print("Greska: nije odbio pogresnu lozinku")
 # except ValueError:
 #     print("Pogresna lozinka ispravno odbijena")
+from crypto.keys import generate_rsa_keypair, export_public_pem, import_pem, calc_key_id, export_keypair_pem
+
+priv = generate_rsa_keypair(2048)
+
+export_public_pem(priv.publickey(), "test_pub.pem")
+tip, k = import_pem("test_pub.pem")
+print("Javni:", tip, "| isti key id:", calc_key_id(k) == calc_key_id(priv))
+
+export_keypair_pem(priv, "test_pair.pem", "lozinka123")
+tip, k2 = import_pem("test_pair.pem", passphrase="lozinka123")
+print("par:", tip, "| isti key id:", calc_key_id(k2) == calc_key_id(priv))
+
+try:
+    import_pem("test_pair.pem", passphrase="pogresna")
+except ValueError:
+    print("pogresna loznika na uvozu para ispravno odbijena")

@@ -100,4 +100,4 @@ class PrivateKeyRing:
         self.save()
 
     def all(self):
-        return self.enties
+        return self.entries
