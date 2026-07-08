@@ -12,6 +12,7 @@ HEADER = b"-----BEGIN PGP MESSAGE-----\n"
 FOOTER = b"\n-----END PGP MESSAGE-----"
 
 
+
 def _put(block):
     size_in_bytes = len(block).to_bytes(4, byteorder='big')
     return size_in_bytes + block
@@ -23,7 +24,7 @@ def _get(txt, offset):
     return content, start + length
 
 
-def _dearmor(raw):
+def remove_radix(raw):
     if raw.lstrip().startswith(b"-----BEGIN PGP MESSAGE-----"):
         inner = raw.split(b"-----BEGIN PGP MESSAGE-----", 1)[1]
         inner = inner.split(b"-----END PGP MESSAGE-----", 1)[0]
@@ -80,7 +81,7 @@ def build_message(data, filename="poruka.txt", sign_priv=None, sender_key_id=Non
 
 # PRIJEM
 def read_recipient_key_id(raw):
-    raw, _ = _dearmor(raw)
+    raw, _ = remove_radix(raw)
     flags = raw[0]
     if not (flags & FLAG_ENCRYPTED):
         return None
@@ -89,7 +90,7 @@ def read_recipient_key_id(raw):
 
 
 def parse_message(raw, private_key=None):
-    raw, was_radix64 = _dearmor(raw)          # skini radix-64 ako ga ima
+    raw, was_radix64 = remove_radix(raw)  # skini radix-64 ako ga ima
     flags = raw[0]                            # procitaj bajt flegova
     offset = 1
 
@@ -113,17 +114,17 @@ def parse_message(raw, private_key=None):
         ks = signing.rsa_decrypt(enc_ks, private_key)      # otkljucaj Ks svojim privatnim
         inner = symmetric.decrypt(algo, ks, iv, ct)        # desifruj sadrzaj sa Ks
     else:
-        inner, offset = _get(raw, offset)                  # skini spoljni _put(inner)
+        inner, offset = _get(raw, offset)
 
     # dekompresija
     if flags & FLAG_COMPRESSED:
         inner = zlib.decompress(inner)
 
-    # razdvoj dve komponente iz inner-a
+    # razdvoj dve komponente
     sig_comp, p = _get(inner, 0)
     msg_comp, p = _get(inner, p)
 
-    # iz sig_comp izvuci polja (ako je potpisano)
+    # iz sig_comp izvuci polja ako je potpisano
     if flags & FLAG_SIGNED:
         skid, q = _get(sig_comp, 0)
         sts, q = _get(sig_comp, q)
