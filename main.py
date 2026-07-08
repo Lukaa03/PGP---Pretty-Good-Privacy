@@ -1,84 +1,27 @@
-# # # # # from crypto.keys import generate_rsa_keypair, public_key_to_pem, pem_to_public_key, calc_key_id
-# # # # #
-# # # # # priv = generate_rsa_keypair(2048)
-# # # # # pem = public_key_to_pem(priv.public_key())
-# # # # # print(pem)
-# # # # # pub2 = pem_to_public_key(pem)
-# # # # # print(calc_key_id(pub2))
-# # # #
-# # # # from storage.keyring import PublicKeyRing
-# # # # from crypto.keys import generate_rsa_keypair
-# # # #
-# # # # ring = PublicKeyRing("public_ring.json")
-# # # # priv = generate_rsa_keypair(2048)
-# # # # unos = ring.add_public_key(priv.public_key(), "Luka", "luka@mail.com")
-# # # # print("dodat:",unos["key_id"])
-# # # #
-# # # # ring2 = PublicKeyRing("public_ring.json")
-# # # # print("Posle reload-a ima:", len(ring2.all()), "unosa")
-# # # # print("Nadjen:", ring2.get_by_id(unos["key_id"]) is not None)
-# # #
-# # # from crypto.keys import generate_rsa_keypair, calc_key_id
-# # #
-# # # priv = generate_rsa_keypair(2048)
-# # # kid = calc_key_id(priv.public_key())
-# # # print("Key ID:", kid, "| duzina:", len(kid))
-# # # assert len(kid) == 16                      # mora biti 16 hex cifara
-# # #
-# # # priv2 = generate_rsa_keypair(2048)         # drugi kljuc = drugi Key ID
-# # # print("Drugi Key ID:", calc_key_id(priv2.public_key()))
-# # #
-# # # try:                                       # pogresna velicina mora da padne
-# # #     generate_rsa_keypair(512)
-# # #     print("GRESKA: nije bacio izuzetak")
-# # # except ValueError as e:
-# # #     print("Provera velicine radi:", e)
-# #
-# # from crypto.keys import generate_rsa_keypair, calc_key_id, public_key_to_pem, pem_to_public_key
-# #
-# # priv = generate_rsa_keypair(2048)
-# # kid = calc_key_id(priv)
-# # print("Key ID:", kid, "| duzina:",len(kid))
-# #
-# # pem = public_key_to_pem(priv.publickey())
-# # print(pem[:40])
-# # pub2 = pem_to_public_key(pem)
-# # print("Ispit Key ID posle PEM tuda-nazad:", calc_key_id(pub2)==kid)
-# #
-# # try:
-# #     generate_rsa_keypair(512)
-# # except ValueError as e:
-# #     print("Provara velicine radi:", e)
-#
-# from storage.keyring import PrivateKeyRing
-#
-# ring = PrivateKeyRing("private_ring.json")
-# unos = ring.add_new_keypair("Luka","luka@mial.com", 2048, "mojalozinka")
-# print("Dodat privatni kljuc:", unos["key_id"])
-#
-# print("Sifrovan:", "ENCRYPTED" in unos["enc_private"])
-#
-# k = ring.load_private_key(unos, "mojalozinka")
-# print("Pristup tacnom lozinkom OK, Key ID:", format(k.n & 0xFFFFFFFFFFFFFFFF, "016x"))
-#
-# try:
-#     ring.load_private_key(unos, "pogrena")
-#     print("Greska: nije odbio pogresnu lozinku")
-# except ValueError:
-#     print("Pogresna lozinka ispravno odbijena")
-from crypto.keys import generate_rsa_keypair, export_public_pem, import_pem, calc_key_id, export_keypair_pem
+from crypto.keys import generate_rsa_keypair
+from crypto.signature import sign_mess, verify_mess
 
-priv = generate_rsa_keypair(2048)
+# --- priprema ---
+kljuc = generate_rsa_keypair(2048)          # ceo par (privatni + javni)
+javni = kljuc.publickey()                   # samo javni deo, za verifikaciju
 
-export_public_pem(priv.publickey(), "test_pub.pem")
-tip, k = import_pem("test_pub.pem")
-print("Javni:", tip, "| isti key id:", calc_key_id(k) == calc_key_id(priv))
+poruka = "Zdravo Bora, ovo je Ana.".encode("utf-8")   # data mora biti bajtovi
 
-export_keypair_pem(priv, "test_pair.pem", "lozinka123")
-tip, k2 = import_pem("test_pair.pem", passphrase="lozinka123")
-print("par:", tip, "| isti key id:", calc_key_id(k2) == calc_key_id(priv))
+# --- 1. potpis pa verifikacija ispravne poruke -> True ---
+potpis = sign_mess(poruka, kljuc)
+print("1) validan potpis:", verify_mess(poruka, potpis, javni))          # ocekujemo True
 
-try:
-    import_pem("test_pair.pem", passphrase="pogresna")
-except ValueError:
-    print("pogresna loznika na uvozu para ispravno odbijena")
+# --- 2. izmenjena poruka -> False ---
+izmenjena = "Zdravo Bora, ovo je Ana!".encode("utf-8")  # jedan znak drugaciji
+print("2) izmenjena poruka:", verify_mess(izmenjena, potpis, javni))     # ocekujemo False
+
+# --- 3. pogresan (tudji) javni kljuc -> False ---
+drugi_kljuc = generate_rsa_keypair(2048)
+print("3) pogresan kljuc:", verify_mess(poruka, potpis, drugi_kljuc.publickey()))  # ocekujemo False
+
+# --- 4. ostecen potpis (promenjen jedan bajt) -> False ---
+ostecen = bytearray(potpis)
+ostecen[0] ^= 0x01                          # obrni jedan bit prvog bajta
+print("4) ostecen potpis:", verify_mess(poruka, bytes(ostecen), javni))  # ocekujemo False
+
+print("\nOcekivano: True, False, False, False")
