@@ -1,18 +1,3 @@
-"""
-Sastavljanje i rastavljanje PGP poruke (.msg fajla).
-Redosled pri slanju:  potpis -> kompresija -> sifrovanje -> radix-64
-Redosled pri prijemu: radix-64^-1 -> desifrovanje -> dekompresija -> razdvajanje -> verifikacija
-
-FORMAT (pre radix-64):
-  [flags 1B]
-  -- ako je ENCRYPTED:  put(recipient_key_id) | algo(1B) | put(iv) | put(enc_Ks) | put(ciphertext)
-  -- inace:             put(inner)
-  inner (posle desifrovanja/dekompresije):
-     put(sig_comp) | put(msg_comp)
-     sig_comp = put(sender_key_id) | put(timestamp) | put(signature)   (prazno ako nije potpisano)
-     msg_comp = put(filename) | put(timestamp) | put(data)
-Radix-64 se prepoznaje po ASCII omotacu (ARMOR), ne po flegu.
-"""
 import zlib
 import base64
 import time
@@ -23,11 +8,10 @@ FLAG_SIGNED     = 0b0001
 FLAG_ENCRYPTED  = 0b0010
 FLAG_COMPRESSED = 0b0100
 
-ARMOR_HEADER = b"-----BEGIN PGP MESSAGE-----\n"
-ARMOR_FOOTER = b"\n-----END PGP MESSAGE-----"
+HEADER = b"-----BEGIN PGP MESSAGE-----\n"
+FOOTER = b"\n-----END PGP MESSAGE-----"
 
 
-# --- pomocne: polje = 4 bajta duzine + sadrzaj ---
 def _put(block):
     size_in_bytes = len(block).to_bytes(4, byteorder='big')
     return size_in_bytes + block
@@ -40,7 +24,6 @@ def _get(txt, offset):
 
 
 def _dearmor(raw):
-    """Ako je poruka u radix-64 omotacu, skini ga i vrati (bajtovi, True)."""
     if raw.lstrip().startswith(b"-----BEGIN PGP MESSAGE-----"):
         inner = raw.split(b"-----BEGIN PGP MESSAGE-----", 1)[1]
         inner = inner.split(b"-----END PGP MESSAGE-----", 1)[0]
@@ -48,9 +31,7 @@ def _dearmor(raw):
     return raw, False
 
 
-# ============================================================
 # SLANJE
-# ============================================================
 def build_message(data, filename="poruka.txt", sign_priv=None, sender_key_id=None,
                   enc_pub=None, recipient_key_id=None, algo=None,
                   compress=False, radix64=False):
@@ -91,17 +72,14 @@ def build_message(data, filename="poruka.txt", sign_priv=None, sender_key_id=Non
 
     out = bytes([flags]) + body
 
-    # radix-64 (poslednji korak)
+    # radix-64
     if radix64:
-        out = ARMOR_HEADER + base64.b64encode(out) + ARMOR_FOOTER
+        out = HEADER + base64.b64encode(out) + FOOTER
     return out
 
 
-# ============================================================
 # PRIJEM
-# ============================================================
 def read_recipient_key_id(raw):
-    """Procitaj ciji je privatni kljuc potreban, BEZ desifrovanja."""
     raw, _ = _dearmor(raw)
     flags = raw[0]
     if not (flags & FLAG_ENCRYPTED):
@@ -111,10 +89,8 @@ def read_recipient_key_id(raw):
 
 
 def parse_message(raw, private_key=None):
-    """Rastavi poruku. Verifikaciju potpisa radi pozivalac
-    (koristeci vraceni sender_key_id + signature + data)."""
-    raw, was_radix64 = _dearmor(raw)          # 1) skini radix-64 ako ga ima
-    flags = raw[0]                            # 2) procitaj bajt flegova
+    raw, was_radix64 = _dearmor(raw)          # skini radix-64 ako ga ima
+    flags = raw[0]                            # procitaj bajt flegova
     offset = 1
 
     result = {
@@ -124,7 +100,7 @@ def parse_message(raw, private_key=None):
         "signed": bool(flags & FLAG_SIGNED),
     }
 
-    # 3) desifrovanje (ako treba)
+    # desifrovanje
     if flags & FLAG_ENCRYPTED:
         recip, offset = _get(raw, offset)
         algo = raw[offset]; offset += 1
@@ -139,15 +115,15 @@ def parse_message(raw, private_key=None):
     else:
         inner, offset = _get(raw, offset)                  # skini spoljni _put(inner)
 
-    # 4) dekompresija (ako treba)
+    # dekompresija
     if flags & FLAG_COMPRESSED:
         inner = zlib.decompress(inner)
 
-    # 5) razdvoj dve komponente iz inner-a
+    # razdvoj dve komponente iz inner-a
     sig_comp, p = _get(inner, 0)
     msg_comp, p = _get(inner, p)
 
-    # 6) iz sig_comp izvuci polja (samo ako je potpisano)
+    # iz sig_comp izvuci polja (ako je potpisano)
     if flags & FLAG_SIGNED:
         skid, q = _get(sig_comp, 0)
         sts, q = _get(sig_comp, q)
@@ -156,7 +132,7 @@ def parse_message(raw, private_key=None):
         result["sig_timestamp"] = sts.decode("ascii")
         result["signature"] = signature
 
-    # 7) iz msg_comp izvuci polja
+    # iz msg_comp izvuci polja
     fn, r = _get(msg_comp, 0)
     mts, r = _get(msg_comp, r)
     data, r = _get(msg_comp, r)

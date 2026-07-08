@@ -1,8 +1,3 @@
-"""
-GUI (Tkinter) za PGP aplikaciju.
-Povezuje: crypto.keys, crypto.signing, crypto.symmetric, crypto.message
-i storage.keyring (PublicKeyRing, PrivateKeyRing).
-"""
 import os
 import tkinter as tk
 from tkinter import ttk, messagebox, filedialog, simpledialog
@@ -13,7 +8,6 @@ from storage.keyring import PublicKeyRing, PrivateKeyRing
 PRIVATE_RING_PATH = "private_ring.json"
 PUBLIC_RING_PATH = "public_ring.json"
 
-# ponudjeni simetricni algoritmi (naziv -> id)
 ALGO_CHOICES = [
     (symmetric.algo_name(symmetric.ALGO_AES128), symmetric.ALGO_AES128),
     (symmetric.algo_name(symmetric.ALGO_3DES), symmetric.ALGO_3DES),
@@ -31,7 +25,6 @@ class MainWindow(tk.Tk):
         self.refresh()
 
     def find_public_entry(self, key_id):
-        # javni kljuc moze biti u javnom prstenu ili medju tvojim parovima
         e = self.public_ring.get_by_id(key_id)
         if e is None:
             e = self.private_ring.get_by_id(key_id)
