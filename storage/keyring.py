@@ -92,6 +92,20 @@ class PrivateKeyRing:
         self.save()
         return entry
 
+    def add_imported_keypair(self, private_key, name, email, passphrase):
+        enc_private = private_key.export_key(format='PEM', passphrase=passphrase, pkcs=8, protection='PBKDF2WithHMAC-SHA1AndAES128-CBC')
+        entry = {
+            "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
+            "key_id": calc_key_id(private_key),
+            "name": name, "email": email,
+            "key_size": private_key.size_in_bits(),
+            "public_pem": public_key_to_pem(private_key.publickey()),
+            "enc_private": enc_private.decode("ascii"),
+        }
+        self.entries.append(entry)
+        self.save()
+        return entry
+
     def load_private_key(self, entry, passphrase):
         return RSA.import_key(entry["enc_private"], passphrase=passphrase)
 
