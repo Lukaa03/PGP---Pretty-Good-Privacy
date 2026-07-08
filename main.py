@@ -1,5 +1,5 @@
 from crypto.keys import generate_rsa_keypair
-from crypto.signature import sign_mess, verify_mess
+from crypto.signing import sign_mess, verify_mess
 
 # --- priprema ---
 kljuc = generate_rsa_keypair(2048)          # ceo par (privatni + javni)
